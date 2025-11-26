@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Waste Prediction Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Auto-refresh every 30 seconds -->
+    <script>
+        setInterval(function() {
+            location.reload();
+        }, 30000);
+    </script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #eef2f7;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 95%;
+            max-width: 1300px;
+            margin: 20px auto 40px auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .kpi-row {
+            display: flex;
+            gap: 20px;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .kpi-box {
+            flex: 1;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .kpi-box h3 {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            color: #555;
+        }
+        .kpi-box p {
+            margin: 0;
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        .filters {
+            background: white;
+            padding: 12px 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px 25px;
+            align-items: center;
+        }
+        .filters label {
+            font-size: 13px;
+            margin-right: 5px;
+        }
+        .filters select,
+        .filters input[type="date"] {
+            padding: 4px 6px;
+            font-size: 13px;
+        }
+        .filters button {
+            padding: 6px 12px;
+            font-size: 13px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .btn-apply {
+            background: #0069d9;
+            color: white;
+        }
+        .btn-reset {
+            background: #777;
+            color: white;
+        }
+        .btn-download {
+            background: #28a745;
+            color: white !important;
+        }
+        .btn-pdf {
+            background: #dc3545;
+            color: white !important;
+        }
+        .charts-row {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .chart-card {
+            flex: 1;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .chart-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+        }
+        .table-card {
+            background: white;
+            padding: 10px 15px 15px 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            margin-top: 10px;
+        }
+        .table-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+        }
+        @media (max-width: 900px) {
+            .kpi-row, .charts-row {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+
+    <h1>Smart Waste Prediction Dashboard</h1>
+
+    <!-- KPI cards -->
+    <div class="kpi-row">
+        <div class="kpi-box">
+            <h3>Avg Forecast</h3>
+            <p>{{ avg_forecast }}</p>
+        </div>
+        <div class="kpi-box">
+            <h3>High Risk Bins</h3>
+            <p>{{ high_risk }}</p>
+        </div>
+        <div class="kpi-box">
+            <h3>Next 24H Forecast</h3>
+            <p>{{ next24h }}</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <form class="filters" method="get">
+
+        <div>
+            <label for="bin_id">Bin:</label>
+            <select name="bin_id" id="bin_id">
+                <option value="ALL">All</option>
+                {% for b in bin_options %}
+                    <option value="{{ b }}" {% if selected_bin == b %}selected{% endif %}>{{ b }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="risk_level">Risk:</label>
+            <select name="risk_level" id="risk_level">
+                <option value="ALL">All</option>
+                <option value="Low" {% if selected_risk == "Low" %}selected{% endif %}>Low</option>
+                <option value="Medium" {% if selected_risk == "Medium" %}selected{% endif %}>Medium</option>
+                <option value="High" {% if selected_risk == "High" %}selected{% endif %}>High</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="start_date">From:</label>
+            <input type="date" name="start_date" id="start_date"
+                   value="{{ selected_start }}" min="{{ min_date }}" max="{{ max_date }}">
+        </div>
+
+        <div>
+            <label for="end_date">To:</label>
+            <input type="date" name="end_date" id="end_date"
+                   value="{{ selected_end }}" min="{{ min_date }}" max="{{ max_date }}">
+        </div>
+
+        <button type="submit" class="btn-apply">Apply Filters</button>
+
+        <a href="/" class="btn-reset" style="text-decoration:none;">Reset</a>
+
+        <a href="/download" class="btn-download" style="text-decoration:none;">Download CSV</a>
+
+        <!-- NEW PDF BUTTON -->
+        <button type="button" id="pdfBtn" class="btn-pdf">Export PDF</button>
+
+    </form>
+
+    <!-- Charts row 1 -->
+    <div class="charts-row">
+        <div class="chart-card">
+            <h3>Forecast Trend (Filtered)</h3>
+            <canvas id="trendChart"></canvas>
+        </div>
+
+        <div class="chart-card">
+            <h3>Daily Average Forecast</h3>
+            <canvas id="dailyChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Charts row 2 -->
+    <div class="charts-row">
+        <div class="chart-card">
+            <h3>Risk Distribution</h3>
+            <canvas id="riskChart"></canvas>
+        </div>
+
+        <div class="chart-card">
+            <h3>Top 5 High-Risk Bins</h3>
+            <canvas id="topBinsChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-card">
+        <h3>Prediction Table</h3>
+        {{ table | safe }}
+    </div>
+
+</div>
+
+<!-- Data for charts -->
+<script>
+    const trendLabels = {{ trend_labels | tojson }};
+    const trendValues = {{ trend_values | tojson }};
+    const dailyLabels = {{ weekly_labels | tojson }};
+    const dailyValues = {{ weekly_values | tojson }};
+    const riskLabels = {{ risk_labels | tojson }};
+    const riskCounts = {{ risk_counts | tojson }};
+    const topBins = {{ top_bins | tojson }};
+    const topVals = {{ top_vals | tojson }};
+</script>
+
+<!-- Chart.js graphs -->
+<script>
+    function createChart(id, type, labels, data, labelText) {
+        const ctx = document.getElementById(id);
+        if (!ctx) return;
+
+        new Chart(ctx, {
+            type: type,
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: labelText,
+                    data: data,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, max: 100 } }
+            }
+        });
+    }
+
+    createChart('trendChart', 'line', trendLabels, trendValues, 'Forecast Fill');
+    createChart('dailyChart', 'bar', dailyLabels, dailyValues, 'Daily Avg');
+    createChart('riskChart', 'doughnut', riskLabels, riskCounts, 'Risk Levels');
+    createChart('topBinsChart', 'bar', topBins, topVals, 'High Risk Bins');
+</script>
+
+<!-- html2canvas + jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<!-- PDF Export Script -->
+<script>
+document.getElementById("pdfBtn").addEventListener("click", function () {
+    const { jsPDF } = window.jspdf;
+
+    html2canvas(document.body).then(function(canvas) {
+        let imgData = canvas.toDataURL("image/png");
+        let pdf = new jsPDF('p', 'mm', 'a4');
+
+        let pdfWidth = pdf.internal.pageSize.getWidth();
+        let pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save("Smart_Waste_Dashboard.pdf");
+    });
+});
+</script>
+
+</body>
+</html>
+
+
